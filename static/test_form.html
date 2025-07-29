@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Тест платежной системы</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .section { margin: 20px 0; padding: 20px; border: 1px solid #ddd; border-radius: 5px; }
+        button { background: #007bff; color: white; padding: 10px 20px; border: none; border-radius: 5px; cursor: pointer; margin: 5px; }
+        input, select { width: 200px; padding: 5px; margin: 5px; }
+        .result { margin: 10px 0; padding: 10px; background: #f8f9fa; border-radius: 5px; white-space: pre-wrap; }
+    </style>
+</head>
+<body>
+    <h1>Тестирование системы купонов</h1>
+    
+    <div class="section">
+        <h2>1. Проверка купонов</h2>
+        <button onclick="loadCoupons()">Загрузить купоны</button>
+        <div id="coupons-result" class="result"></div>
+    </div>
+    
+    <div class="section">
+        <h2>2. Создание заказа</h2>
+        <div>
+            <label>Купон:</label>
+            <select id="couponSelect">
+                <option value="1">Скидка 10% (100 руб.)</option>
+                <option value="2">Скидка 20% (200 руб.)</option>
+                <option value="3">Бесплатная доставка (50 руб.)</option>
+                <option value="4">Скидка 50% (500 руб.)</option>
+            </select>
+        </div>
+        <div>
+            <label>User ID:</label>
+            <input type="text" id="userId" value="skr1ms_test_${Date.now()}">
+        </div>
+        <button onclick="createOrder()">Создать заказ</button>
+        <div id="order-result" class="result"></div>
+    </div>
+    
+    <div class="section">
+        <h2>3. Проверка статуса заказа</h2>
+        <input type="text" id="orderNumber" placeholder="Номер заказа">
+        <button onclick="checkStatus()">Проверить статус</button>
+        <div id="status-result" class="result"></div>
+    </div>
+
+    <script>
+        let lastOrderNumber = '';
+        
+        function loadCoupons() {
+            fetch('/api/coupons')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('coupons-result').textContent = JSON.stringify(data, null, 2);
+                })
+                .catch(error => {
+                    document.getElementById('coupons-result').textContent = 'Ошибка: ' + error.message;
+                });
+        }
+
+        function createOrder() {
+            const couponId = document.getElementById('couponSelect').value;
+            const userId = document.getElementById('userId').value;
+            
+            const orderData = {
+                coupon_id: parseInt(couponId),
+                user_id: userId,
+                return_url: window.location.origin + '/payment/return',
+                fail_url: window.location.origin + '/payment/return'
+            };
+
+            fetch('/api/orders', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(orderData)
+            })
+            .then(response => response.json())
+            .then(data => {
+                document.getElementById('order-result').textContent = JSON.stringify(data, null, 2);
+                
+                if (data.success && data.payment_url) {
+                    const orderNumberMatch = data.payment_url.match(/orderNumber=([^&]+)/);
+                    if (orderNumberMatch) {
+                        lastOrderNumber = orderNumberMatch[1];
+                        document.getElementById('orderNumber').value = lastOrderNumber;
+                    }
+                    
+                    document.getElementById('order-result').innerHTML += 
+                        '\n\n<a href="' + data.payment_url + '" target="_blank" style="background: green; color: white; padding: 10px; text-decoration: none; border-radius: 5px;">🚀 ПЕРЕЙТИ К ОПЛАТЕ</a>';
+                }
+            })
+            .catch(error => {
+                document.getElementById('order-result').textContent = 'Ошибка: ' + error.message;
+            });
+        }
+
+        function checkStatus() {
+            const orderNumber = document.getElementById('orderNumber').value;
+            if (!orderNumber) {
+                alert('Введите номер заказа');
+                return;
+            }
+
+            fetch('/api/orders/' + orderNumber + '/status')
+                .then(response => response.json())
+                .then(data => {
+                    document.getElementById('status-result').textContent = JSON.stringify(data, null, 2);
+                })
+                .catch(error => {
+                    document.getElementById('status-result').textContent = 'Ошибка: ' + error.message;
+                });
+        }
+
+        // Автозагрузка купонов при открытии страницы
+        window.onload = function() {
+            loadCoupons();
+            // Устанавливаем уникальный User ID
+            document.getElementById('userId').value = 'skr1ms_test_' + Date.now();
+        };
+    </script>
+</body>
+</html>
